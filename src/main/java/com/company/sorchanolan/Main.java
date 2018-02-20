@@ -63,12 +63,13 @@ public class Main {
         Results results = new Results();
         results.setAnalyzer(analyzer.getName());
         results.setSimilarity(similarity.getName());
-        resultsList.add(runTrecEval(qrelsPath, resultsPath, results));
+        if (!similarity.getName().equals("Boolean")) {
+          resultsList.add(runTrecEval(qrelsPath, resultsPath, results));
+        } else {
+          resultsList.add(runTrecEval(qrelsPathBoolean, resultsPath, results));
+        }
       }
     }
-
-    System.out.println("wtf");
-    System.out.println("hi");
   }
 
   private void createIndex(List<Document> documents, Analyzer analyzer, Similarity similarity, Path indexPath) throws Exception {
