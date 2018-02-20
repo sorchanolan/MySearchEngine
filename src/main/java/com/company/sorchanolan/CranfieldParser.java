@@ -3,6 +3,7 @@ package com.company.sorchanolan;
 import org.apache.lucene.document.*;
 
 import java.io.File;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -101,11 +102,15 @@ public class CranfieldParser {
   }
 
   public List<RelevanceJudgement> parseRelevanceJudgements() throws Exception {
+    PrintWriter writer = new PrintWriter("trec_eval.9.0/trec-qrels.txt", "UTF-8");
     Scanner scanner = new Scanner(relevanceJudgementFile);
     List<RelevanceJudgement> relevanceJudgements = new ArrayList<>();
     while (scanner.hasNextLine()) {
-      relevanceJudgements.add(new RelevanceJudgement(scanner.nextInt() ,scanner.nextInt() , scanner.nextInt()));
+      RelevanceJudgement relevanceJudgement = new RelevanceJudgement(scanner.nextInt() ,scanner.nextInt() , scanner.nextInt());
+      relevanceJudgements.add(relevanceJudgement);
+      writer.println(relevanceJudgement.getQueryIndex() + " 0 " + relevanceJudgement.getDocumentIndex() + " " + relevanceJudgement.getRelevance());
     }
+    writer.close();
     return relevanceJudgements;
   }
 }
