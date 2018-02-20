@@ -1,7 +1,6 @@
 package com.company.sorchanolan;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.core.KeywordAnalyzer;
 import org.apache.lucene.analysis.core.StopAnalyzer;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
@@ -20,6 +19,9 @@ import org.apache.lucene.search.similarities.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -38,27 +40,35 @@ public class Main {
     CranfieldParser cranfieldParser = new CranfieldParser();
     cranfieldParser.parseRelevanceJudgements(qrelsPath, qrelsPathBoolean);
 
-    List<Analyzer> analyzers = new ArrayList<>();
-    analyzers.add(new StandardAnalyzer());
-    analyzers.add(new WhitespaceAnalyzer());
-    analyzers.add(new EnglishAnalyzer());
-    analyzers.add(new StopAnalyzer());
+    List<AnalyserObj> analyzers = new ArrayList<>();
+    analyzers.add(new AnalyserObj(new StandardAnalyzer(), "Standard"));
+    analyzers.add(new AnalyserObj(new WhitespaceAnalyzer(), "Whitespace"));
+    analyzers.add(new AnalyserObj(new EnglishAnalyzer(), "English"));
+    analyzers.add(new AnalyserObj(new StopAnalyzer(), "Stop"));
 
-    List<Similarity> similarities = new ArrayList<>();
-    similarities.add(new ClassicSimilarity());
-    similarities.add(new BM25Similarity());
-    similarities.add(new BooleanSimilarity());
+    List<SimilarityObj> similarities = new ArrayList<>();
+    similarities.add(new SimilarityObj(new ClassicSimilarity(), "Classic"));
+    similarities.add(new SimilarityObj(new BM25Similarity(), "BM25"));
+    similarities.add(new SimilarityObj(new BooleanSimilarity(), "Boolean"));
 
-    int count = 0;
-    for (Similarity similarity : similarities) {
-      for (Analyzer analyzer : analyzers) {
-        Path indexPath = Paths.get("index-" + count);
-        String resultsPath = "trec-qrels-results-" + count + ".txt";
-        createIndex(cranfieldParser.parseDocuments(), analyzer, similarity, indexPath);
-        search(cranfieldParser.parseQueries(), analyzer, similarity, indexPath, resultsPath);
-        count++;
+    List<Results> resultsList = new ArrayList<>();
+
+    for (SimilarityObj similarity : similarities) {
+      for (AnalyserObj analyzer : analyzers) {
+        Path indexPath = Paths.get("index-" + analyzer.getName() + "-" + similarity.getName());
+        String resultsPath = "trec-qrels-results-" + analyzer.getName() + "-" + similarity.getName() + ".txt";
+        createIndex(cranfieldParser.parseDocuments(), analyzer.getAnalyzer(), similarity.getSimilarity(), indexPath);
+        search(cranfieldParser.parseQueries(), analyzer.getAnalyzer(), similarity.getSimilarity(), indexPath, resultsPath);
+
+        Results results = new Results();
+        results.setAnalyzer(analyzer.getName());
+        results.setSimilarity(similarity.getName());
+        resultsList.add(runTrecEval(qrelsPath, resultsPath, results));
       }
     }
+
+    System.out.println("wtf");
+    System.out.println("hi");
   }
 
   private void createIndex(List<Document> documents, Analyzer analyzer, Similarity similarity, Path indexPath) throws Exception {
@@ -99,5 +109,34 @@ public class Main {
       }
     }
     writer.close();
+  }
+
+  private Results runTrecEval(String groundTruthPath, String resultsPath, Results results) throws Exception {
+    String[] command = {"./trec_eval/trec_eval", groundTruthPath, resultsPath};
+    ProcessBuilder processBuilder = new ProcessBuilder(command);
+
+    Process process = processBuilder.start();
+    InputStream is = process.getInputStream();
+    InputStreamReader isr = new InputStreamReader(is);
+    BufferedReader br = new BufferedReader(isr);
+    String line;
+
+    while ((line = br.readLine()) != null) {
+      System.out.println(line);
+      if (line.startsWith("map")) {
+        results.setMap(Double.parseDouble(line.split("\\s+")[2]));
+      } else if (line.startsWith("gm_map")) {
+        results.setGm_map(Double.parseDouble(line.split("\\s+")[2]));
+      } else if (line.startsWith("P_5")) {
+        results.setP_5(Double.parseDouble(line.split("\\s+")[2]));
+      } else if (line.startsWith("P_10")) {
+        results.setP_10(Double.parseDouble(line.split("\\s+")[2]));
+      } else if (line.startsWith("P_15")) {
+        results.setP_15(Double.parseDouble(line.split("\\s+")[2]));
+      }
+    }
+
+    process.waitFor();
+    return results;
   }
 }
