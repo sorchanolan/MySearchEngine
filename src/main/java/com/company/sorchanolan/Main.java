@@ -1,6 +1,9 @@
 package com.company.sorchanolan;
 
 import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.core.KeywordAnalyzer;
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
@@ -13,15 +16,19 @@ import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.similarities.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Main {
+  private String qrelsPath = "trec-qrels.txt";
+  private String qrelsPathBoolean = "trec-qrels-boolean.txt";
 
   public static void main(String[] args) throws Exception {
     new Main();
@@ -29,21 +36,35 @@ public class Main {
 
   public Main() throws Exception {
     CranfieldParser cranfieldParser = new CranfieldParser();
+    cranfieldParser.parseRelevanceJudgements(qrelsPath, qrelsPathBoolean);
 
-    List<Document> documents = cranfieldParser.parseDocuments();
-    List<Query> queries = cranfieldParser.parseQueries();
-    List<RelevanceJudgement> relevanceJudgements = cranfieldParser.parseRelevanceJudgements();
+    List<Analyzer> analyzers = new ArrayList<>();
+    analyzers.add(new StandardAnalyzer());
+    analyzers.add(new WhitespaceAnalyzer());
+    analyzers.add(new EnglishAnalyzer());
+    analyzers.add(new StopAnalyzer());
 
-    Path indexPath = Paths.get("index");
+    List<Similarity> similarities = new ArrayList<>();
+    similarities.add(new ClassicSimilarity());
+    similarities.add(new BM25Similarity());
+    similarities.add(new BooleanSimilarity());
 
-    createIndex(documents, indexPath);
-    search(queries, indexPath);
+    int count = 0;
+    for (Similarity similarity : similarities) {
+      for (Analyzer analyzer : analyzers) {
+        Path indexPath = Paths.get("index-" + count);
+        String resultsPath = "trec-qrels-results-" + count + ".txt";
+        createIndex(cranfieldParser.parseDocuments(), analyzer, similarity, indexPath);
+        search(cranfieldParser.parseQueries(), analyzer, similarity, indexPath, resultsPath);
+        count++;
+      }
+    }
   }
 
-  public void createIndex(List<Document> documents, Path indexPath) throws Exception {
-    Analyzer analyzer = englishAnalyser();
+  private void createIndex(List<Document> documents, Analyzer analyzer, Similarity similarity, Path indexPath) throws Exception {
     IndexWriterConfig config = new IndexWriterConfig(analyzer);
     config.setOpenMode(IndexWriterConfig.OpenMode.CREATE);
+    config.setSimilarity(similarity);
     Directory directory = FSDirectory.open(indexPath);
 
     final IndexWriter writer = new IndexWriter(directory, config);
@@ -54,16 +75,16 @@ public class Main {
     directory.close();
   }
 
-  public void search(List<Query> queries, Path indexPath) throws Exception {
+  private void search(List<Query> queries, Analyzer analyzer, Similarity similarity, Path indexPath, String resultsPath) throws Exception {
     IndexReader reader = DirectoryReader.open(FSDirectory.open(indexPath));
     IndexSearcher searcher = new IndexSearcher(reader);
-    Analyzer analyzer = englishAnalyser();
+    searcher.setSimilarity(similarity);
 
     MultiFieldQueryParser queryParser = new MultiFieldQueryParser(
         new String[] {"text", "title", "author", "journal"},
         analyzer);
 
-    PrintWriter writer = new PrintWriter("trec_eval.9.0/trec-qrels-results.txt", "UTF-8");
+    PrintWriter writer = new PrintWriter(resultsPath, "UTF-8");
 
     for (int queryIndex = 1; queryIndex <= queries.size(); queryIndex++) {
       String currentQuery = queries.get(queryIndex-1).getQuery();
@@ -71,17 +92,12 @@ public class Main {
       org.apache.lucene.search.Query query = queryParser.parse(currentQuery);
       TopDocs results = searcher.search(query, 1400);
       ScoreDoc[] hits = results.scoreDocs;
-      int numTotalHits = Math.toIntExact(results.totalHits);
+
       for (int hitIndex = 0; hitIndex < hits.length; hitIndex++) {
         ScoreDoc hit = hits[hitIndex];
         writer.println(queryIndex + " 0 " + hit.doc+1 + " " + hitIndex + " " + hit.score + " 0 ");
       }
-      System.out.println(numTotalHits + " total matching documents");
     }
     writer.close();
-  }
-
-  public Analyzer englishAnalyser() {
-    return new StandardAnalyzer(EnglishAnalyzer.getDefaultStopSet());
   }
 }

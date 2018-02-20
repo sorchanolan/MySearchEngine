@@ -45,14 +45,14 @@ public class CranfieldParser {
           while (scanner.hasNext() && !scanner.hasNext("\\.B(.*)")) {
             author.append(scanner.nextLine()).append(" ");
           }
-          document.add(new TextField("author", author.toString(), Field.Store.YES));
+          document.add(new StringField("author", author.toString(), Field.Store.YES));
           break;
         }
         case (".B"): {
           while (scanner.hasNext() && !scanner.hasNext("\\.W(.*)")) {
             journal.append(scanner.nextLine()).append(" ");
           }
-          document.add(new TextField("journal", journal.toString(), Field.Store.YES));
+          document.add(new StringField("journal", journal.toString(), Field.Store.YES));
           break;
         }
         case (".W"): {
@@ -101,16 +101,20 @@ public class CranfieldParser {
     return queries;
   }
 
-  public List<RelevanceJudgement> parseRelevanceJudgements() throws Exception {
-    PrintWriter writer = new PrintWriter("trec_eval.9.0/trec-qrels.txt", "UTF-8");
+  public List<RelevanceJudgement> parseRelevanceJudgements(String qrelsPath, String qrelsPathBoolean) throws Exception {
+    PrintWriter writer = new PrintWriter(qrelsPath, "UTF-8");
+    PrintWriter writerBoolean = new PrintWriter(qrelsPathBoolean, "UTF-8");
     Scanner scanner = new Scanner(relevanceJudgementFile);
     List<RelevanceJudgement> relevanceJudgements = new ArrayList<>();
     while (scanner.hasNextLine()) {
       RelevanceJudgement relevanceJudgement = new RelevanceJudgement(scanner.nextInt() ,scanner.nextInt() , scanner.nextInt());
       relevanceJudgements.add(relevanceJudgement);
       writer.println(relevanceJudgement.getQueryIndex() + " 0 " + relevanceJudgement.getDocumentIndex() + " " + relevanceJudgement.getRelevance());
+      int relevance = relevanceJudgement.getRelevance() > 0 && relevanceJudgement.getRelevance() < 4 ? 1 : 0;
+      writerBoolean.println(relevanceJudgement.getQueryIndex() + " 0 " + relevanceJudgement.getDocumentIndex() + " " + relevance);
     }
     writer.close();
+    writerBoolean.close();
     return relevanceJudgements;
   }
 }
