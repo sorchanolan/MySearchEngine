@@ -1,7 +1,6 @@
 package com.company.sorchanolan;
 
 import lombok.Data;
-import org.apache.lucene.analysis.Analyzer;
 
 @Data
 public class Results {
@@ -12,4 +11,5 @@ public class Results {
   private double p_5;
   private double p_10;
   private double p_15;
+  private double rPrec;
 }

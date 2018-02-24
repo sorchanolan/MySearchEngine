@@ -26,11 +26,13 @@ import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class Main {
   private String qrelsPath = "trec-qrels.txt";
   private String qrelsPathBoolean = "trec-qrels-boolean.txt";
+  private String qrelsPathFlip = "trec-qrels-flip.txt";
 
   public static void main(String[] args) throws Exception {
     new Main();
@@ -38,7 +40,9 @@ public class Main {
 
   public Main() throws Exception {
     CranfieldParser cranfieldParser = new CranfieldParser();
-    cranfieldParser.parseRelevanceJudgements(qrelsPath, qrelsPathBoolean);
+    cranfieldParser.parseRelevanceJudgements(qrelsPath, qrelsPathBoolean, qrelsPathFlip);
+    List<Document> documents = cranfieldParser.parseDocuments();
+    List<Query> queries = cranfieldParser.parseQueries();
 
     List<AnalyserObj> analyzers = new ArrayList<>();
     analyzers.add(new AnalyserObj(new StandardAnalyzer(), "Standard"));
@@ -55,19 +59,15 @@ public class Main {
 
     for (SimilarityObj similarity : similarities) {
       for (AnalyserObj analyzer : analyzers) {
-        Path indexPath = Paths.get("index-" + analyzer.getName() + "-" + similarity.getName());
-        String resultsPath = "trec-qrels-results-" + analyzer.getName() + "-" + similarity.getName() + ".txt";
-        createIndex(cranfieldParser.parseDocuments(), analyzer.getAnalyzer(), similarity.getSimilarity(), indexPath);
-        search(cranfieldParser.parseQueries(), analyzer.getAnalyzer(), similarity.getSimilarity(), indexPath, resultsPath);
+        Path indexPath = Paths.get(String.format("index-%s-%s", analyzer.getName(), similarity.getName()));
+        String resultsPath = String.format("trec-qrels-results-%s-%s.txt", analyzer.getName(), similarity.getName());
+        createIndex(documents, analyzer.getAnalyzer(), similarity.getSimilarity(), indexPath);
+        search(queries, analyzer.getAnalyzer(), similarity.getSimilarity(), indexPath, resultsPath);
 
         Results results = new Results();
         results.setAnalyzer(analyzer.getName());
         results.setSimilarity(similarity.getName());
-        if (!similarity.getName().equals("Boolean")) {
-          resultsList.add(runTrecEval(qrelsPath, resultsPath, results));
-        } else {
-          resultsList.add(runTrecEval(qrelsPathBoolean, resultsPath, results));
-        }
+        resultsList.add(runTrecEval(qrelsPathFlip, resultsPath, results, analyzer.getName(), similarity.getName()));
       }
     }
   }
@@ -92,7 +92,7 @@ public class Main {
     searcher.setSimilarity(similarity);
 
     MultiFieldQueryParser queryParser = new MultiFieldQueryParser(
-        new String[] {"text", "title", "author", "journal"},
+        new String[] {"text", "title", "author", "journal", "index"},
         analyzer);
 
     PrintWriter writer = new PrintWriter(resultsPath, "UTF-8");
@@ -106,14 +106,15 @@ public class Main {
 
       for (int hitIndex = 0; hitIndex < hits.length; hitIndex++) {
         ScoreDoc hit = hits[hitIndex];
-        writer.println(queryIndex + " 0 " + hit.doc+1 + " " + hitIndex + " " + hit.score + " 0 ");
+        int docIndex = hit.doc + 1;
+        writer.format("%d 0 %d %d %f 0 \n", queryIndex, docIndex, hitIndex, hit.score);
       }
     }
     writer.close();
   }
 
-  private Results runTrecEval(String groundTruthPath, String resultsPath, Results results) throws Exception {
-    String[] command = {"./trec_eval/trec_eval", groundTruthPath, resultsPath};
+  private Results runTrecEval(String groundTruthPath, String resultsPath, Results results, String analyser, String similarity) throws Exception {
+    String[] command = {"./trec_eval/trec_eval", "-l=3", groundTruthPath, resultsPath};
     ProcessBuilder processBuilder = new ProcessBuilder(command);
 
     Process process = processBuilder.start();
@@ -122,18 +123,22 @@ public class Main {
     BufferedReader br = new BufferedReader(isr);
     String line;
 
+    System.out.format("\n%s %s\n", analyser, similarity);
+
     while ((line = br.readLine()) != null) {
       System.out.println(line);
       if (line.startsWith("map")) {
         results.setMap(Double.parseDouble(line.split("\\s+")[2]));
       } else if (line.startsWith("gm_map")) {
         results.setGm_map(Double.parseDouble(line.split("\\s+")[2]));
-      } else if (line.startsWith("P_5")) {
+      } else if (line.startsWith("P_5 ")) {
         results.setP_5(Double.parseDouble(line.split("\\s+")[2]));
-      } else if (line.startsWith("P_10")) {
+      } else if (line.startsWith("P_10 ")) {
         results.setP_10(Double.parseDouble(line.split("\\s+")[2]));
-      } else if (line.startsWith("P_15")) {
+      } else if (line.startsWith("P_15 ")) {
         results.setP_15(Double.parseDouble(line.split("\\s+")[2]));
+      } else if (line.startsWith("Rprec")) {
+        results.setRPrec(Double.parseDouble(line.split("\\s+")[2]));
       }
     }
 
