@@ -19,15 +19,13 @@ import org.apache.lucene.search.similarities.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Scanner;
 
 public class Main {
   private String qrelsPath = "trec-qrels.txt";
@@ -70,6 +68,21 @@ public class Main {
         resultsList.add(runTrecEval(qrelsPathFlip, resultsPath, results, analyzer.getName(), similarity.getName()));
       }
     }
+
+    Results bestResults = getBestResults(resultsList);
+    System.out.format("\nSystem with %s Analyser and %s scoring performs the best.\n", bestResults.getAnalyzer(), bestResults.getSimilarity());
+    Analyzer bestAnalyser = analyzers.stream()
+        .filter(analyserObj -> analyserObj.getName().equals(bestResults.getAnalyzer()))
+        .map(AnalyserObj::getAnalyzer)
+        .findFirst()
+        .get();
+    Similarity bestSimilarity = similarities.stream()
+        .filter(similarityObj -> similarityObj.getName().equals(bestResults.getSimilarity()))
+        .map(SimilarityObj::getSimilarity)
+        .findFirst()
+        .get();
+
+    runSearchEngine(bestResults, bestAnalyser, bestSimilarity);
   }
 
   private void createIndex(List<Document> documents, Analyzer analyzer, Similarity similarity, Path indexPath) throws Exception {
@@ -113,6 +126,26 @@ public class Main {
     writer.close();
   }
 
+  private void searchInputQuery(String query, Analyzer analyzer, Similarity similarity, Path indexPath, int numDocs) throws Exception {
+    IndexReader reader = DirectoryReader.open(FSDirectory.open(indexPath));
+    IndexSearcher searcher = new IndexSearcher(reader);
+    searcher.setSimilarity(similarity);
+
+    MultiFieldQueryParser queryParser = new MultiFieldQueryParser(
+        new String[] {"text", "title", "author", "journal", "index"},
+        analyzer);
+    query = QueryParser.escape(query);
+    org.apache.lucene.search.Query searchQuery = queryParser.parse(query);
+    TopDocs results = searcher.search(searchQuery, numDocs);
+    ScoreDoc[] hits = results.scoreDocs;
+
+    for (int hitIndex = 0; hitIndex < hits.length; hitIndex++) {
+      ScoreDoc hit = hits[hitIndex];
+      Document document = reader.document(hit.doc);
+      System.out.format("%d. %s\n", hitIndex+1, document.get("title"));
+    }
+  }
+
   private Results runTrecEval(String groundTruthPath, String resultsPath, Results results, String analyser, String similarity) throws Exception {
     String[] command = {"./trec_eval/trec_eval", "-l=3", groundTruthPath, resultsPath};
     ProcessBuilder processBuilder = new ProcessBuilder(command);
@@ -144,5 +177,70 @@ public class Main {
 
     process.waitFor();
     return results;
+  }
+
+
+  private Results getBestResults(List<Results> resultsList) {
+    resultsList.stream()
+        .max(Comparator.comparing(Results::getMap))
+        .get()
+        .incrementScore();
+    resultsList.stream()
+        .max(Comparator.comparing(Results::getGm_map))
+        .get()
+        .incrementScore();
+    resultsList.stream()
+        .max(Comparator.comparing(Results::getRPrec))
+        .get()
+        .incrementScore();
+    resultsList.stream()
+        .max(Comparator.comparing(Results::getP_5))
+        .get()
+        .incrementScore();
+    resultsList.stream()
+        .max(Comparator.comparing(Results::getP_10))
+        .get()
+        .incrementScore();
+    resultsList.stream()
+        .max(Comparator.comparing(Results::getP_15))
+        .get()
+        .incrementScore();
+    return resultsList.stream()
+        .max(Comparator.comparing(Results::getScore))
+        .get();
+  }
+
+  private void runSearchEngine(Results bestResults, Analyzer bestAnalyser, Similarity bestSimilarity) throws Exception {
+
+
+    BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
+    StringBuilder queryInput = new StringBuilder();
+    String line, numDocsStr;
+    int numDocs = -1;
+    while (true) {
+      System.out.println("\nPlease enter search query (type exit to finish):");
+      line = stdin.readLine();
+      do {
+        queryInput.append(line).append(" ");
+      } while ((line = stdin.readLine()) != null && line.length()!= 0);
+
+      if (queryInput.toString().contains("exit")) {
+        break;
+      }
+
+      do {
+        System.out.println("Number of return results required:");
+        numDocsStr = stdin.readLine();
+        if (numDocsStr.matches("-?\\d+(\\.\\d+)?")) {
+          numDocs = Integer.parseInt(numDocsStr);
+        } else {
+          System.out.println("Please enter a number.");
+        }
+      } while (!numDocsStr.matches("-?\\d+(\\.\\d+)?"));
+
+      System.out.format("\nTitles of %d relevant documents:\n", numDocs);
+      Path indexPath = Paths.get(String.format("index-%s-%s", bestResults.getAnalyzer(), bestResults.getSimilarity()));
+      searchInputQuery(queryInput.toString(), bestAnalyser, bestSimilarity, indexPath, numDocs);
+    }
   }
 }

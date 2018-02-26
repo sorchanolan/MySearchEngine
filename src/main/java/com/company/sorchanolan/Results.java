@@ -12,4 +12,9 @@ public class Results {
   private double p_10;
   private double p_15;
   private double rPrec;
+  private int score;
+
+  public void incrementScore() {
+    score++;
+  }
 }
