@@ -101,24 +101,13 @@ public class CranfieldParser {
     return queries;
   }
 
-  public List<RelevanceJudgement> parseRelevanceJudgements(String qrelsPath, String qrelsPathBoolean, String qrelsPathFlip) throws Exception {
-    PrintWriter writer = new PrintWriter(qrelsPath, "UTF-8");
-    PrintWriter writerBoolean = new PrintWriter(qrelsPathBoolean, "UTF-8");
-    PrintWriter writerFlip = new PrintWriter(qrelsPathFlip, "UTF-8");
+  public List<RelevanceJudgement> parseRelevanceJudgements() throws Exception {
     Scanner scanner = new Scanner(relevanceJudgementFile);
     List<RelevanceJudgement> relevanceJudgements = new ArrayList<>();
     while (scanner.hasNextLine()) {
       RelevanceJudgement relevanceJudgement = new RelevanceJudgement(scanner.nextInt() ,scanner.nextInt() , scanner.nextInt());
       relevanceJudgements.add(relevanceJudgement);
-      writer.format("%d 0 %d %d\n", relevanceJudgement.getQueryIndex(), relevanceJudgement.getDocumentIndex(), relevanceJudgement.getRelevance());
-      int relevance = relevanceJudgement.getRelevance() > 0 && relevanceJudgement.getRelevance() < 4 ? 1 : relevanceJudgement.getRelevance() == -1 ? -1 : 0;
-      writerBoolean.format("%d 0 %d %d\n", relevanceJudgement.getQueryIndex(), relevanceJudgement.getDocumentIndex(), relevance);
-      relevance = relevanceJudgement.getRelevance() != -1 ? 6 - relevanceJudgement.getRelevance() : -1;
-      writerFlip.format("%d 0 %d %d\n", relevanceJudgement.getQueryIndex(), relevanceJudgement.getDocumentIndex(), relevance);
     }
-    writer.close();
-    writerBoolean.close();
-    writerFlip.close();
     return relevanceJudgements;
   }
 }

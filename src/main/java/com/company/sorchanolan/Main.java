@@ -25,12 +25,9 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Scanner;
 
 public class Main {
-  private String qrelsPath = "trec-qrels.txt";
-  private String qrelsPathBoolean = "trec-qrels-boolean.txt";
-  private String qrelsPathFlip = "trec-qrels-flip.txt";
+  private String qrelsPath = "QRelsCorrectedforTRECeval.txt";
 
   public static void main(String[] args) throws Exception {
     new Main();
@@ -38,7 +35,7 @@ public class Main {
 
   public Main() throws Exception {
     CranfieldParser cranfieldParser = new CranfieldParser();
-    cranfieldParser.parseRelevanceJudgements(qrelsPath, qrelsPathBoolean, qrelsPathFlip);
+    cranfieldParser.parseRelevanceJudgements();
     List<Document> documents = cranfieldParser.parseDocuments();
     List<Query> queries = cranfieldParser.parseQueries();
 
@@ -65,7 +62,7 @@ public class Main {
         Results results = new Results();
         results.setAnalyzer(analyzer.getName());
         results.setSimilarity(similarity.getName());
-        resultsList.add(runTrecEval(qrelsPathFlip, resultsPath, results, analyzer.getName(), similarity.getName()));
+        resultsList.add(runTrecEval(qrelsPath, resultsPath, results, analyzer.getName(), similarity.getName()));
       }
     }
 
@@ -147,7 +144,7 @@ public class Main {
   }
 
   private Results runTrecEval(String groundTruthPath, String resultsPath, Results results, String analyser, String similarity) throws Exception {
-    String[] command = {"./trec_eval/trec_eval", "-l=3", groundTruthPath, resultsPath};
+    String[] command = {"./trec_eval/trec_eval", groundTruthPath, resultsPath};
     ProcessBuilder processBuilder = new ProcessBuilder(command);
 
     Process process = processBuilder.start();
@@ -156,7 +153,7 @@ public class Main {
     BufferedReader br = new BufferedReader(isr);
     String line;
 
-    System.out.format("\n%s %s\n", analyser, similarity);
+    System.out.format("\n%s Analyser, %s Similarity\n", analyser, similarity);
 
     while ((line = br.readLine()) != null) {
       System.out.println(line);
