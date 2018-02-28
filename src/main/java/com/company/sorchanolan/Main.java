@@ -123,7 +123,7 @@ public class Main {
     writer.close();
   }
 
-  private void searchInputQuery(String query, Analyzer analyzer, Similarity similarity, Path indexPath, int numDocs) throws Exception {
+  private List<Document> searchInputQuery(String query, Analyzer analyzer, Similarity similarity, Path indexPath, int numDocs) throws Exception {
     IndexReader reader = DirectoryReader.open(FSDirectory.open(indexPath));
     IndexSearcher searcher = new IndexSearcher(reader);
     searcher.setSimilarity(similarity);
@@ -136,11 +136,14 @@ public class Main {
     TopDocs results = searcher.search(searchQuery, numDocs);
     ScoreDoc[] hits = results.scoreDocs;
 
+    List<Document> documents = new ArrayList<>();
     for (int hitIndex = 0; hitIndex < hits.length; hitIndex++) {
       ScoreDoc hit = hits[hitIndex];
       Document document = reader.document(hit.doc);
+      documents.add(document);
       System.out.format("%d. %s\n", hitIndex+1, document.get("title"));
     }
+    return documents;
   }
 
   private Results runTrecEval(String groundTruthPath, String resultsPath, Results results, String analyser, String similarity) throws Exception {
@@ -208,32 +211,52 @@ public class Main {
   }
 
   private void runSearchEngine(Results bestResults, Analyzer bestAnalyser, Similarity bestSimilarity) throws Exception {
-
-
     BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
-    String queryInput, numDocsStr;
-    int numDocs = -1;
-    while (true) {
-      System.out.println("\nPlease enter search query (type exit to finish):");
-      queryInput = stdin.readLine();
+    String input;
+    int num = -1;
 
-      if (queryInput.equals("exit")) {
+    outerloop:
+    while (true) {
+      System.out.println("\nEnter search query (type exit to finish).");
+      input = stdin.readLine();
+
+      if (input.equals("exit")) {
         break;
       }
 
       do {
-        System.out.println("Number of return results required:");
-        numDocsStr = stdin.readLine();
-        if (numDocsStr.matches("-?\\d+(\\.\\d+)?")) {
-          numDocs = Integer.parseInt(numDocsStr);
+        System.out.println("Enter number of return results required.");
+        input = stdin.readLine();
+        if (input.matches("-?\\d+(\\.\\d+)?")) {
+          num = Integer.parseInt(input);
         } else {
+          if (input.equals("exit")) {
+            break;
+          }
           System.out.println("Please enter a number.");
         }
-      } while (!numDocsStr.matches("-?\\d+(\\.\\d+)?"));
+      } while (!input.matches("-?\\d+(\\.\\d+)?"));
 
-      System.out.format("\nTitles of %d relevant documents:\n", numDocs);
+      System.out.format("\nTitles of %d relevant documents:\n", num);
       Path indexPath = Paths.get(String.format("index-%s-%s", bestResults.getAnalyzer(), bestResults.getSimilarity()));
-      searchInputQuery(queryInput, bestAnalyser, bestSimilarity, indexPath, numDocs);
+      List<Document> documents = searchInputQuery(input, bestAnalyser, bestSimilarity, indexPath, num);
+
+      do {
+        System.out.println("\nEnter document number to return document.");
+        input = stdin.readLine();
+        if (input.matches("-?\\d+(\\.\\d+)?")) {
+          num = Integer.parseInt(input);
+        } else {
+          if (input.equals("exit")) {
+            break outerloop;
+          }
+          System.out.println("Please enter a number.");
+        }
+      } while (!input.matches("-?\\d+(\\.\\d+)?"));
+
+      Document document = documents.get(num-1);
+      String text = document.get("text").replaceAll("((?:\\w+\\s){10}\\w+)(\\s)", "$1\n");
+      System.out.print(text);
     }
   }
 }
