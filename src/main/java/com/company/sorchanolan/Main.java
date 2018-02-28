@@ -211,17 +211,13 @@ public class Main {
 
 
     BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
-    StringBuilder queryInput = new StringBuilder();
-    String line, numDocsStr;
+    String queryInput, numDocsStr;
     int numDocs = -1;
     while (true) {
       System.out.println("\nPlease enter search query (type exit to finish):");
-      line = stdin.readLine();
-      do {
-        queryInput.append(line).append(" ");
-      } while ((line = stdin.readLine()) != null && line.length()!= 0);
+      queryInput = stdin.readLine();
 
-      if (queryInput.toString().contains("exit")) {
+      if (queryInput.equals("exit")) {
         break;
       }
 
@@ -237,7 +233,7 @@ public class Main {
 
       System.out.format("\nTitles of %d relevant documents:\n", numDocs);
       Path indexPath = Paths.get(String.format("index-%s-%s", bestResults.getAnalyzer(), bestResults.getSimilarity()));
-      searchInputQuery(queryInput.toString(), bestAnalyser, bestSimilarity, indexPath, numDocs);
+      searchInputQuery(queryInput, bestAnalyser, bestSimilarity, indexPath, numDocs);
     }
   }
 }
